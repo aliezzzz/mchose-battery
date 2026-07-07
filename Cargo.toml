@@ -1,0 +1,27 @@
+[package]
+name = "mchose-battery-tray"
+version = "0.1.0"
+edition = "2021"
+description = "A no-window Windows tray utility for MCHOSE / MaiCong mouse battery status."
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+anyhow = "1"
+hidapi = { version = "2.6", features = ["windows-native"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
+parking_lot = "0.12"
+tray-icon = "0.24"
+windows-registry = "0.6"
+windows-sys = { version = "0.61", features = ["Win32_System_LibraryLoader"] }
+winit = "0.30"
+
+[dev-dependencies]
+anyhow = "1"
+resvg = "0.47"
+usvg = "0.47"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+panic = "abort"
