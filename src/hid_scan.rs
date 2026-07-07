@@ -15,7 +15,7 @@ pub fn scan_mchose_devices() -> Result<Vec<MchoseDevice>> {
             continue;
         }
 
-        if let Some((protocol, battery)) = try_read_with_any_protocol(&api, info) {
+        if let Some((protocol, status)) = try_read_with_any_protocol(&api, info) {
             let path = info.path().to_string_lossy().to_string();
             let product = info.product_string().unwrap_or("").trim().to_string();
 
@@ -32,7 +32,7 @@ pub fn scan_mchose_devices() -> Result<Vec<MchoseDevice>> {
                 pid: info.product_id(),
                 path,
                 protocol: protocol.to_string(),
-                battery: Some(battery),
+                status: Some(status),
                 last_seen: Instant::now(),
             });
         }
@@ -65,10 +65,19 @@ pub fn debug_scan() -> Result<()> {
         println!("path         = {}", info.path().to_string_lossy());
 
         match try_read_with_any_protocol(&api, info) {
-            Some((protocol, battery)) => {
+            Some((protocol, status)) => {
                 println!("[OK] protocol = {}", protocol);
-                println!("[OK] battery  = {}%", battery.percent);
-                println!("[OK] charge   = {}", battery.charge_state.label());
+                println!("[OK] battery  = {}%", status.battery.percent);
+                println!("[OK] charge   = {}", status.battery.charge_state.label());
+                match &status.dpi {
+                    Some(dpi) => {
+                        println!(
+                            "[OK] dpi      = {} (index={}, count={})",
+                            dpi.value, dpi.index, dpi.count
+                        )
+                    }
+                    None => println!("[OK] dpi      = None"),
+                }
             }
             None => {
                 println!("[FAIL] no known protocol returned valid battery data");
@@ -78,7 +87,7 @@ pub fn debug_scan() -> Result<()> {
                     }
 
                     match info.open_device(&api) {
-                        Ok(device) => match protocol.read_battery(&device) {
+                        Ok(device) => match protocol.read_status(&device) {
                             Ok(_) => {}
                             Err(err) => println!("[DEBUG] {} error: {err}", protocol.name()),
                         },

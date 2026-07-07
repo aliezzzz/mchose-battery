@@ -29,6 +29,30 @@ pub struct BatteryInfo {
     pub charge_state: ChargeState,
 }
 
+#[derive(Debug, Clone)]
+pub struct DpiInfo {
+    pub value: u16,
+    pub index: u8,
+    pub count: u8,
+}
+
+impl DpiInfo {
+    pub fn label(&self) -> String {
+        format!(
+            "DPI：{}（第{}档/共{}档）",
+            self.value,
+            self.index + 1,
+            self.count
+        )
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct DeviceStatus {
+    pub battery: BatteryInfo,
+    pub dpi: Option<DpiInfo>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AppearanceMode {
     Auto,
@@ -54,23 +78,30 @@ pub struct MchoseDevice {
     pub pid: u16,
     pub path: String,
     pub protocol: String,
-    pub battery: Option<BatteryInfo>,
+    pub status: Option<DeviceStatus>,
     pub last_seen: Instant,
 }
 
 impl MchoseDevice {
     pub fn battery_label(&self) -> String {
-        match &self.battery {
-            Some(battery) => format!("{}%", battery.percent),
+        match &self.status {
+            Some(status) => format!("{}%", status.battery.percent),
             None => "未知".to_string(),
         }
     }
 
     pub fn charge_label(&self) -> &'static str {
-        self.battery
+        self.status
             .as_ref()
-            .map(|battery| battery.charge_state.label())
+            .map(|status| status.battery.charge_state.label())
             .unwrap_or("未知")
+    }
+
+    pub fn dpi_label(&self) -> String {
+        match &self.status {
+            Some(status) if status.dpi.is_some() => status.dpi.as_ref().unwrap().label(),
+            _ => "DPI：未知".to_string(),
+        }
     }
 
     pub fn menu_label(&self, selected: bool) -> String {
@@ -130,12 +161,12 @@ impl AppState {
 
     pub fn current_tooltip(&self) -> String {
         match self.current_device() {
-            Some(device) => match &device.battery {
-                Some(battery) => format!(
+            Some(device) => match &device.status {
+                Some(status) => format!(
                     "{}：{}% · {}",
                     device.name,
-                    battery.percent,
-                    battery.charge_state.label()
+                    status.battery.percent,
+                    status.battery.charge_state.label()
                 ),
                 None => format!("{}：电量未知", device.name),
             },

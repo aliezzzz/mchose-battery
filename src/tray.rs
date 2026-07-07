@@ -26,6 +26,7 @@ pub struct TrayController {
     current_item: MenuItem,
     battery_item: IconMenuItem,
     status_item: MenuItem,
+    dpi_item: MenuItem,
     appearance_auto_item: CheckMenuItem,
     appearance_dark_item: CheckMenuItem,
     appearance_light_item: CheckMenuItem,
@@ -46,7 +47,8 @@ impl TrayController {
         let current_item = MenuItem::with_id("current", "● 未发现设备", true, None);
         let battery_item = IconMenuItem::with_id("battery", "电量：--", true, None, None);
         let status_item = MenuItem::with_id("status", "状态：--", true, None);
-        let refresh_item = MenuItem::with_id(MENU_REFRESH, "刷新电量", true, None);
+        let dpi_item = MenuItem::with_id("dpi", "DPI：--", true, None);
+        let refresh_item = MenuItem::with_id(MENU_REFRESH, "刷新", true, None);
         let rescan_item = MenuItem::with_id(MENU_RESCAN, "重新扫描设备", true, None);
         let appearance_auto_item =
             CheckMenuItem::with_id(MENU_APPEARANCE_AUTO, "自动", true, true, None);
@@ -75,6 +77,7 @@ impl TrayController {
             &current_item,
             &battery_item,
             &status_item,
+            &dpi_item,
             &sep2,
             &refresh_item,
             &rescan_item,
@@ -87,7 +90,8 @@ impl TrayController {
             load_battery_icon(
                 state
                     .current_device()
-                    .and_then(|device| device.battery.as_ref()),
+                    .and_then(|device| device.status.as_ref())
+                    .map(|status| &status.battery),
                 state.appearance_mode,
             )?
         };
@@ -111,6 +115,7 @@ impl TrayController {
             current_item,
             battery_item,
             status_item,
+            dpi_item,
             appearance_auto_item,
             appearance_dark_item,
             appearance_light_item,
@@ -124,19 +129,19 @@ impl TrayController {
         match state.current_device() {
             Some(device) => {
                 self.current_item.set_text(format!("● {}", device.name));
+                let battery = device.status.as_ref().map(|status| &status.battery);
                 self.battery_item
-                    .set_text(format_battery_menu_text(device.battery.as_ref()));
+                    .set_text(format_battery_menu_text(battery));
                 self.battery_item
-                    .set_icon(Some(load_menu_status_icon(device.battery.as_ref())?));
+                    .set_icon(Some(load_menu_status_icon(battery)?));
                 self.status_item.set_text(format!(
                     "状态：{}",
                     format_charge_label(device.charge_label())
                 ));
+                self.dpi_item.set_text(device.dpi_label());
 
-                self.tray_icon.set_icon(Some(load_battery_icon(
-                    device.battery.as_ref(),
-                    state.appearance_mode,
-                )?))?;
+                self.tray_icon
+                    .set_icon(Some(load_battery_icon(battery, state.appearance_mode)?))?;
             }
             None => {
                 self.current_item.set_text("● 未发现设备");
@@ -144,6 +149,7 @@ impl TrayController {
                 self.battery_item
                     .set_icon(Some(load_menu_status_icon(None)?));
                 self.status_item.set_text("状态：--");
+                self.dpi_item.set_text("DPI：未知");
 
                 self.tray_icon
                     .set_icon(Some(load_battery_icon(None, state.appearance_mode)?))?;

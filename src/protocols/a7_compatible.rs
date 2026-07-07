@@ -1,7 +1,7 @@
 use anyhow::{anyhow, bail, Result};
 use hidapi::{DeviceInfo, HidDevice};
 
-use crate::app_state::{BatteryInfo, ChargeState};
+use crate::app_state::{BatteryInfo, ChargeState, DeviceStatus};
 use crate::protocols::BatteryProtocol;
 
 pub struct A7CompatibleProtocol;
@@ -21,12 +21,12 @@ impl BatteryProtocol for A7CompatibleProtocol {
         info.vendor_id() == VID && info.product_id() == PID
     }
 
-    fn read_battery(&self, device: &HidDevice) -> Result<BatteryInfo> {
-        read_a7_compatible_battery(device)
+    fn read_status(&self, device: &HidDevice) -> Result<DeviceStatus> {
+        read_a7_compatible_status(device)
     }
 }
 
-pub fn read_a7_compatible_battery(device: &HidDevice) -> Result<BatteryInfo> {
+pub fn read_a7_compatible_status(device: &HidDevice) -> Result<DeviceStatus> {
     let report = build_query_report();
     device.send_feature_report(&report)?;
 
@@ -54,7 +54,7 @@ fn build_query_report() -> Vec<u8> {
     report
 }
 
-fn parse_response(response: &[u8]) -> Result<BatteryInfo> {
+fn parse_response(response: &[u8]) -> Result<DeviceStatus> {
     if response.len() < 13 {
         bail!("response too short: {}", response.len());
     }
@@ -80,8 +80,11 @@ fn parse_response(response: &[u8]) -> Result<BatteryInfo> {
         _ => ChargeState::Unknown,
     };
 
-    Ok(BatteryInfo {
-        percent,
-        charge_state,
+    Ok(DeviceStatus {
+        battery: BatteryInfo {
+            percent,
+            charge_state,
+        },
+        dpi: None,
     })
 }

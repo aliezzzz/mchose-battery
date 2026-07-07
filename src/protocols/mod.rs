@@ -1,7 +1,7 @@
 use anyhow::Result;
 use hidapi::{DeviceInfo, HidApi, HidDevice};
 
-use crate::app_state::BatteryInfo;
+use crate::app_state::DeviceStatus;
 
 pub mod a7_compatible;
 pub mod g3;
@@ -9,7 +9,7 @@ pub mod g3;
 pub trait BatteryProtocol: Send + Sync {
     fn name(&self) -> &'static str;
     fn matches(&self, info: &DeviceInfo) -> bool;
-    fn read_battery(&self, device: &HidDevice) -> Result<BatteryInfo>;
+    fn read_status(&self, device: &HidDevice) -> Result<DeviceStatus>;
 }
 
 pub fn all_protocols() -> Vec<Box<dyn BatteryProtocol>> {
@@ -22,7 +22,7 @@ pub fn all_protocols() -> Vec<Box<dyn BatteryProtocol>> {
 pub fn try_read_with_any_protocol(
     api: &HidApi,
     info: &DeviceInfo,
-) -> Option<(&'static str, BatteryInfo)> {
+) -> Option<(&'static str, DeviceStatus)> {
     for protocol in all_protocols() {
         if !protocol.matches(info) {
             continue;
@@ -33,8 +33,8 @@ pub fn try_read_with_any_protocol(
             Err(_) => continue,
         };
 
-        match protocol.read_battery(&device) {
-            Ok(battery) => return Some((protocol.name(), battery)),
+        match protocol.read_status(&device) {
+            Ok(status) => return Some((protocol.name(), status)),
             Err(_) => continue,
         }
     }
