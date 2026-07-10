@@ -91,6 +91,7 @@ pub struct AppState {
     pub devices: Vec<MchoseDevice>,
     pub current_index: usize,
     pub appearance_mode: AppearanceMode,
+    pub startup_enabled: bool,
 }
 
 impl AppState {
@@ -99,6 +100,7 @@ impl AppState {
             devices: Vec::new(),
             current_index: 0,
             appearance_mode: AppearanceMode::Auto,
+            startup_enabled: false,
         }
     }
 

@@ -5,6 +5,7 @@ mod device_listener;
 mod hid_scan;
 mod icons;
 mod protocols;
+mod startup;
 mod tray;
 mod windows_theme;
 
@@ -23,6 +24,7 @@ pub enum UserEvent {
     Refresh,
     Rescan,
     SetAppearance(AppearanceMode),
+    ToggleStartup,
     Exit,
     Tick,
 }
@@ -83,6 +85,14 @@ impl ApplicationHandler<UserEvent> for TrayApp {
                 windows_theme::apply_menu_appearance(appearance);
                 let _ = self.tray.refresh_all(&self.state.lock());
             }
+            UserEvent::ToggleStartup => {
+                let enabled = !self.state.lock().startup_enabled;
+                match startup::set_enabled(enabled) {
+                    Ok(()) => self.state.lock().startup_enabled = enabled,
+                    Err(err) => eprintln!("failed to update startup setting: {err}"),
+                }
+                let _ = self.tray.refresh_all(&self.state.lock());
+            }
             UserEvent::Exit => event_loop.exit(),
         }
     }
@@ -108,6 +118,11 @@ fn run_tray() -> anyhow::Result<()> {
     let proxy = event_loop.create_proxy();
 
     let state = Arc::new(Mutex::new(AppState::new()));
+
+    state.lock().startup_enabled = startup::is_enabled().unwrap_or_else(|err| {
+        eprintln!("failed to read startup setting: {err}");
+        false
+    });
 
     {
         let devices = hid_scan::scan_mchose_devices().unwrap_or_default();

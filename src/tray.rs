@@ -17,6 +17,7 @@ pub const MENU_RESCAN: &str = "rescan";
 pub const MENU_APPEARANCE_AUTO: &str = "appearance_auto";
 pub const MENU_APPEARANCE_DARK: &str = "appearance_dark";
 pub const MENU_APPEARANCE_LIGHT: &str = "appearance_light";
+pub const MENU_STARTUP: &str = "startup";
 pub const MENU_QUIT: &str = "quit";
 
 pub struct TrayController {
@@ -30,6 +31,7 @@ pub struct TrayController {
     appearance_auto_item: CheckMenuItem,
     appearance_dark_item: CheckMenuItem,
     appearance_light_item: CheckMenuItem,
+    startup_item: CheckMenuItem,
 }
 
 impl TrayController {
@@ -65,6 +67,10 @@ impl TrayController {
                 &appearance_light_item,
             ],
         )?;
+        let startup_item = {
+            let state = state.lock();
+            CheckMenuItem::with_id(MENU_STARTUP, "开机启动", true, state.startup_enabled, None)
+        };
         let quit_item = MenuItem::with_id(MENU_QUIT, "退出", true, None);
 
         let sep1 = PredefinedMenuItem::separator();
@@ -82,6 +88,7 @@ impl TrayController {
             &refresh_item,
             &rescan_item,
             &appearance_menu,
+            &startup_item,
             &quit_item,
         ])?;
 
@@ -119,6 +126,7 @@ impl TrayController {
             appearance_auto_item,
             appearance_dark_item,
             appearance_light_item,
+            startup_item,
         })
     }
 
@@ -157,6 +165,7 @@ impl TrayController {
         }
 
         self.refresh_appearance_menu(state.appearance_mode);
+        self.startup_item.set_checked(state.startup_enabled);
         self.tray_icon.set_tooltip(Some(&state.current_tooltip()))?;
         Ok(())
     }
@@ -239,6 +248,9 @@ fn setup_event_forwarding(proxy: EventLoopProxy<UserEvent>) {
                 }
                 MENU_APPEARANCE_LIGHT => {
                     let _ = menu_proxy.send_event(UserEvent::SetAppearance(AppearanceMode::Light));
+                }
+                MENU_STARTUP => {
+                    let _ = menu_proxy.send_event(UserEvent::ToggleStartup);
                 }
                 MENU_QUIT => {
                     let _ = menu_proxy.send_event(UserEvent::Exit);

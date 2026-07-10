@@ -20,6 +20,11 @@ anyhow = "1"
 resvg = "0.47"
 usvg = "0.47"
 
+[build-dependencies]
+resvg = "0.47"
+usvg = "0.47"
+winresource = "0.1"
+
 [profile.release]
 strip = true
 lto = true
