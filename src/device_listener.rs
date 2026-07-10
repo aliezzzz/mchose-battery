@@ -170,7 +170,7 @@ pub fn spawn_device_listener(proxy: EventLoopProxy<UserEvent>) {
             return;
         }
 
-        let mut filter = DevBroadcastDeviceInterface {
+        let filter = DevBroadcastDeviceInterface {
             dbcc_size: std::mem::size_of::<DevBroadcastDeviceInterface>() as u32,
             dbcc_devicetype: DBT_DEVTYP_DEVICEINTERFACE,
             dbcc_reserved: 0,

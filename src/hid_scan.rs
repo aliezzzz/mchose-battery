@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 use anyhow::Result;
 use hidapi::{DeviceInfo, HidApi};
 
@@ -15,8 +13,7 @@ pub fn scan_mchose_devices() -> Result<Vec<MchoseDevice>> {
             continue;
         }
 
-        if let Some((protocol, status)) = try_read_with_any_protocol(&api, info) {
-            let path = info.path().to_string_lossy().to_string();
+        if let Some((_protocol, status)) = try_read_with_any_protocol(&api, info) {
             let product = info.product_string().unwrap_or("").trim().to_string();
 
             let name = if product.is_empty() {
@@ -26,14 +23,8 @@ pub fn scan_mchose_devices() -> Result<Vec<MchoseDevice>> {
             };
 
             result.push(MchoseDevice {
-                id: stable_id_from_path(&path),
                 name,
-                vid: info.vendor_id(),
-                pid: info.product_id(),
-                path,
-                protocol: protocol.to_string(),
                 status: Some(status),
-                last_seen: Instant::now(),
             });
         }
     }
@@ -119,14 +110,4 @@ fn looks_like_mchose(info: &DeviceInfo) -> bool {
         || text.contains("maicong")
         || text.contains("迈从")
         || info.vendor_id() == 0x5253
-}
-
-fn stable_id_from_path(path: &str) -> String {
-    // 简单 FNV-1a，避免菜单 item id 太长。
-    let mut hash: u64 = 0xcbf29ce484222325;
-    for b in path.as_bytes() {
-        hash ^= *b as u64;
-        hash = hash.wrapping_mul(0x100000001b3);
-    }
-    format!("dev_{hash:016x}")
 }

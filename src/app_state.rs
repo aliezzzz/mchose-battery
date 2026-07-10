@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChargeState {
     Unknown,
@@ -16,10 +14,6 @@ impl ChargeState {
             ChargeState::Charging => "充电中",
             ChargeState::Full => "已充满",
         }
-    }
-
-    pub fn is_charging(&self) -> bool {
-        matches!(self, ChargeState::Charging)
     }
 }
 
@@ -72,24 +66,11 @@ impl AppearanceMode {
 
 #[derive(Debug, Clone)]
 pub struct MchoseDevice {
-    pub id: String,
     pub name: String,
-    pub vid: u16,
-    pub pid: u16,
-    pub path: String,
-    pub protocol: String,
     pub status: Option<DeviceStatus>,
-    pub last_seen: Instant,
 }
 
 impl MchoseDevice {
-    pub fn battery_label(&self) -> String {
-        match &self.status {
-            Some(status) => format!("{}%", status.battery.percent),
-            None => "未知".to_string(),
-        }
-    }
-
     pub fn charge_label(&self) -> &'static str {
         self.status
             .as_ref()
@@ -102,17 +83,6 @@ impl MchoseDevice {
             Some(status) if status.dpi.is_some() => status.dpi.as_ref().unwrap().label(),
             _ => "DPI：未知".to_string(),
         }
-    }
-
-    pub fn menu_label(&self, selected: bool) -> String {
-        let prefix = if selected { "✓ " } else { "  " };
-        format!(
-            "{}{} · {} · {}",
-            prefix,
-            self.name,
-            self.battery_label(),
-            self.charge_label()
-        )
     }
 }
 
@@ -151,12 +121,6 @@ impl AppState {
             return;
         }
         self.current_index = (self.current_index + 1) % self.devices.len();
-    }
-
-    pub fn select_device(&mut self, index: usize) {
-        if index < self.devices.len() {
-            self.current_index = index;
-        }
     }
 
     pub fn current_tooltip(&self) -> String {

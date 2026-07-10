@@ -14,8 +14,8 @@ use std::time::Duration;
 use app_state::{AppState, AppearanceMode};
 use parking_lot::Mutex;
 use tray::TrayController;
-use winit::event::Event;
-use winit::event_loop::{ControlFlow, EventLoop};
+use winit::application::ApplicationHandler;
+use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 
 #[derive(Debug)]
 pub enum UserEvent {
@@ -25,6 +25,67 @@ pub enum UserEvent {
     SetAppearance(AppearanceMode),
     Exit,
     Tick,
+}
+
+struct TrayApp {
+    state: Arc<Mutex<AppState>>,
+    tray: TrayController,
+}
+
+impl ApplicationHandler<UserEvent> for TrayApp {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        event_loop.set_control_flow(ControlFlow::Wait);
+    }
+
+    fn window_event(
+        &mut self,
+        _: &ActiveEventLoop,
+        _: winit::window::WindowId,
+        _: winit::event::WindowEvent,
+    ) {
+    }
+
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
+        match event {
+            UserEvent::TrayLeftClick => {
+                {
+                    let mut state = self.state.lock();
+                    if state.devices.len() <= 1 {
+                        let devices = hid_scan::scan_mchose_devices().unwrap_or_default();
+                        state.set_devices(devices);
+                    } else {
+                        state.switch_next();
+                    }
+                }
+                let _ = self.tray.refresh_all(&self.state.lock());
+            }
+            UserEvent::Refresh | UserEvent::Tick => {
+                {
+                    let devices = hid_scan::scan_mchose_devices().unwrap_or_default();
+                    self.state.lock().set_devices(devices);
+                }
+                let _ = self.tray.refresh_all(&self.state.lock());
+            }
+            UserEvent::Rescan => {
+                {
+                    let devices = hid_scan::scan_mchose_devices().unwrap_or_default();
+                    let mut state = self.state.lock();
+                    state.set_devices(devices);
+                    state.current_index = 0;
+                }
+                let _ = self.tray.refresh_all(&self.state.lock());
+            }
+            UserEvent::SetAppearance(appearance) => {
+                {
+                    let mut state = self.state.lock();
+                    state.appearance_mode = appearance;
+                }
+                windows_theme::apply_menu_appearance(appearance);
+                let _ = self.tray.refresh_all(&self.state.lock());
+            }
+            UserEvent::Exit => event_loop.exit(),
+        }
+    }
 }
 
 fn main() -> anyhow::Result<()> {
@@ -64,52 +125,8 @@ fn run_tray() -> anyhow::Result<()> {
 
     device_listener::spawn_device_listener(proxy.clone());
 
-    event_loop.run(move |event, event_loop| {
-        event_loop.set_control_flow(ControlFlow::Wait);
-
-        match event {
-            Event::UserEvent(UserEvent::TrayLeftClick) => {
-                {
-                    let mut state = state.lock();
-                    if state.devices.len() <= 1 {
-                        let devices = hid_scan::scan_mchose_devices().unwrap_or_default();
-                        state.set_devices(devices);
-                    } else {
-                        state.switch_next();
-                    }
-                }
-                let _ = tray.refresh_all(&state.lock());
-            }
-            Event::UserEvent(UserEvent::Refresh) | Event::UserEvent(UserEvent::Tick) => {
-                {
-                    let devices = hid_scan::scan_mchose_devices().unwrap_or_default();
-                    state.lock().set_devices(devices);
-                }
-                let _ = tray.refresh_all(&state.lock());
-            }
-            Event::UserEvent(UserEvent::Rescan) => {
-                {
-                    let devices = hid_scan::scan_mchose_devices().unwrap_or_default();
-                    let mut state = state.lock();
-                    state.set_devices(devices);
-                    state.current_index = 0;
-                }
-                let _ = tray.refresh_all(&state.lock());
-            }
-            Event::UserEvent(UserEvent::SetAppearance(appearance)) => {
-                {
-                    let mut state = state.lock();
-                    state.appearance_mode = appearance;
-                }
-                windows_theme::apply_menu_appearance(appearance);
-                let _ = tray.refresh_all(&state.lock());
-            }
-            Event::UserEvent(UserEvent::Exit) => {
-                event_loop.exit();
-            }
-            _ => {}
-        }
-    })?;
+    let mut app = TrayApp { state, tray };
+    event_loop.run_app(&mut app)?;
 
     Ok(())
 }

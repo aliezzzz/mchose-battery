@@ -22,10 +22,10 @@ pub fn icon_path_for_battery(battery: Option<&BatteryInfo>, appearance: Appearan
     let name = match battery {
         None => format!("battery-unknown-{suffix}.png"),
         Some(info) => {
-            let bucket = battery_bucket(info.percent);
             if matches!(info.charge_state, ChargeState::Charging) {
-                format!("battery-charging-{bucket}-{suffix}.png")
+                format!("battery-charging-{suffix}.png")
             } else {
+                let bucket = battery_bucket(info.percent);
                 format!("battery-{bucket}-{suffix}.png")
             }
         }
@@ -86,10 +86,10 @@ fn load_menu_icon_from_path(path: PathBuf) -> Result<tray_icon::menu::Icon> {
 
 fn status_icon_path(battery: Option<&BatteryInfo>) -> PathBuf {
     let name = match battery.map(|battery| battery.percent) {
-        Some(0..=20) => "battery-status-red.png",
-        Some(21..=50) => "battery-status-yellow.png",
-        Some(_) => "battery-status-green.png",
-        None => "battery-status-yellow.png",
+        Some(0..=20) => "battery-status-low.png",
+        Some(21..=50) => "battery-status-medium.png",
+        Some(_) => "battery-status-normal.png",
+        None => "battery-status-unknown.png",
     };
 
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -101,12 +101,10 @@ fn status_icon_path(battery: Option<&BatteryInfo>) -> PathBuf {
 
 fn battery_bucket(percent: u8) -> u8 {
     match percent {
-        0..=10 => 0,
-        11..=30 => 20,
-        31..=50 => 40,
-        51..=70 => 60,
-        71..=90 => 80,
-        _ => 100,
+        0..=20 => 0,
+        21..=50 => 1,
+        51..=75 => 2,
+        _ => 3,
     }
 }
 
