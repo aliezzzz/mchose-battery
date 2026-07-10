@@ -12,7 +12,7 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 parking_lot = "0.12"
 tray-icon = "0.24"
 windows-registry = "0.6"
-windows-sys = { version = "0.61", features = ["Win32_System_LibraryLoader"] }
+windows-sys = { version = "0.61", features = ["Win32_System_LibraryLoader", "Win32_UI_Shell"] }
 winit = "0.30"
 
 [dev-dependencies]

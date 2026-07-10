@@ -15,12 +15,14 @@ use std::time::Duration;
 use app_state::{AppState, AppearanceMode};
 use parking_lot::Mutex;
 use tray::TrayController;
+use windows_sys::Win32::UI::Shell::ShellExecuteW;
 use winit::application::ApplicationHandler;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 
 #[derive(Debug)]
 pub enum UserEvent {
     TrayLeftClick,
+    OpenWebsite,
     Refresh,
     Rescan,
     SetAppearance(AppearanceMode),
@@ -61,6 +63,11 @@ impl ApplicationHandler<UserEvent> for TrayApp {
                 }
                 let _ = self.tray.refresh_all(&self.state.lock());
             }
+            UserEvent::OpenWebsite => {
+                if let Err(err) = open_website() {
+                    eprintln!("failed to open MCHOSE website: {err}");
+                }
+            }
             UserEvent::Refresh | UserEvent::Tick => {
                 {
                     let devices = hid_scan::scan_mchose_devices().unwrap_or_default();
@@ -96,6 +103,26 @@ impl ApplicationHandler<UserEvent> for TrayApp {
             UserEvent::Exit => event_loop.exit(),
         }
     }
+}
+
+fn open_website() -> anyhow::Result<()> {
+    let url: Vec<u16> = "https://www.mchose.com.cn\0".encode_utf16().collect();
+    let result = unsafe {
+        ShellExecuteW(
+            std::ptr::null_mut(),
+            std::ptr::null(),
+            url.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            1,
+        )
+    };
+
+    if (result as isize) <= 32 {
+        anyhow::bail!("ShellExecuteW failed with code {}", result as isize);
+    }
+
+    Ok(())
 }
 
 fn main() -> anyhow::Result<()> {

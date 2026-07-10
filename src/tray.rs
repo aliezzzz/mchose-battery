@@ -13,6 +13,7 @@ use crate::icons::{load_battery_icon, load_menu_brand_icon, load_menu_status_ico
 use crate::UserEvent;
 
 pub const MENU_REFRESH: &str = "refresh";
+pub const MENU_OPEN_WEBSITE: &str = "open_website";
 pub const MENU_RESCAN: &str = "rescan";
 pub const MENU_APPEARANCE_AUTO: &str = "appearance_auto";
 pub const MENU_APPEARANCE_DARK: &str = "appearance_dark";
@@ -39,7 +40,7 @@ impl TrayController {
         let title_item = {
             let state = state.lock();
             IconMenuItem::with_id(
-                "title",
+                MENU_OPEN_WEBSITE,
                 "MCHOSE Battery",
                 true,
                 Some(load_menu_brand_icon(state.appearance_mode)?),
@@ -234,6 +235,9 @@ fn setup_event_forwarding(proxy: EventLoopProxy<UserEvent>) {
         move |event: tray_icon::menu::MenuEvent| {
             let id = event.id.as_ref();
             match id {
+                MENU_OPEN_WEBSITE => {
+                    let _ = menu_proxy.send_event(UserEvent::OpenWebsite);
+                }
                 MENU_REFRESH => {
                     let _ = menu_proxy.send_event(UserEvent::Refresh);
                 }
