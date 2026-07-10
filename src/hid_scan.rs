@@ -109,5 +109,9 @@ fn looks_like_mchose(info: &DeviceInfo) -> bool {
     text.contains("mchose")
         || text.contains("maicong")
         || text.contains("迈从")
-        || info.vendor_id() == 0x5253
+        || info.vendor_id() == 0x5253 // 旧 A7
+        || info.vendor_id() == 0x2023 // 旧 A5/AX5
+        || info.vendor_id() == 0x3837 // 新一代 HUB / gmouse 有线
+        || info.vendor_id() == 0xa8a5 // G3 A 等无线
+        || info.vendor_id() == 0xa8a4 // 部分有线
 }

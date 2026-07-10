@@ -3,8 +3,10 @@ use hidapi::{DeviceInfo, HidApi, HidDevice};
 
 use crate::app_state::DeviceStatus;
 
+pub mod a5_pro;
 pub mod a7_compatible;
 pub mod g3;
+pub mod hub_native;
 
 pub trait BatteryProtocol: Send + Sync {
     fn name(&self) -> &'static str;
@@ -14,8 +16,13 @@ pub trait BatteryProtocol: Send + Sync {
 
 pub fn all_protocols() -> Vec<Box<dyn BatteryProtocol>> {
     vec![
+        // 精确匹配优先
+        Box::new(a5_pro::A5ProProtocol),
         Box::new(a7_compatible::A7CompatibleProtocol),
-        Box::new(g3::G3Protocol),
+        // gmouse 网页族（usage 0xFF01）
+        Box::new(g3::GmouseProtocol),
+        // 主 HUB 新型号（较宽匹配，放后）
+        Box::new(hub_native::HubNativeProtocol),
     ]
 }
 

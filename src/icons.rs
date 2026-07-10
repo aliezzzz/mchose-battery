@@ -1,5 +1,3 @@
-use std::path::{Path, PathBuf};
-
 use anyhow::{Context, Result};
 use tray_icon::Icon;
 use windows_registry::CURRENT_USER;
@@ -12,91 +10,110 @@ enum IconPalette {
     DarkBackground,
 }
 
-pub fn icon_path_for_battery(battery: Option<&BatteryInfo>, appearance: AppearanceMode) -> PathBuf {
-    let palette = effective_palette(appearance);
-    let suffix = match palette {
-        IconPalette::LightBackground => "light",
-        IconPalette::DarkBackground => "dark",
-    };
-
-    let name = match battery {
-        None => format!("battery-unknown-{suffix}.png"),
-        Some(info) => {
-            if matches!(info.charge_state, ChargeState::Charging) {
-                format!("battery-charging-{suffix}.png")
-            } else {
-                let bucket = battery_bucket(info.percent);
-                format!("battery-{bucket}-{suffix}.png")
-            }
-        }
-    };
-
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("assets")
-        .join("tray")
-        .join("png")
-        .join(name)
-}
-
-pub fn load_icon(path: impl AsRef<Path>) -> Result<Icon> {
-    let path = path.as_ref();
-    let image = image::open(path)
-        .with_context(|| format!("failed to load tray icon: {}", path.display()))?
-        .into_rgba8();
-
-    let (width, height) = image.dimensions();
-    Icon::from_rgba(image.into_raw(), width, height)
-        .map_err(|err| anyhow::anyhow!("invalid tray icon {}: {err}", path.display()))
-}
-
 pub fn load_battery_icon(
     battery: Option<&BatteryInfo>,
     appearance: AppearanceMode,
 ) -> Result<Icon> {
-    let path = icon_path_for_battery(battery, appearance);
-    load_icon(path)
+    load_icon_from_bytes(battery_icon_bytes(battery, appearance))
 }
 
 pub fn load_menu_status_icon(battery: Option<&BatteryInfo>) -> Result<tray_icon::menu::Icon> {
-    let path = status_icon_path(battery);
-    load_menu_icon_from_path(path)
+    load_menu_icon_from_bytes(status_icon_bytes(battery))
 }
 
 pub fn load_menu_brand_icon(appearance: AppearanceMode) -> Result<tray_icon::menu::Icon> {
-    let suffix = match effective_palette(appearance) {
-        IconPalette::LightBackground => "light",
-        IconPalette::DarkBackground => "dark",
-    };
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("assets")
-        .join("tray")
-        .join("png")
-        .join(format!("mchose-logo-{suffix}-16.png"));
-    load_menu_icon_from_path(path)
+    load_menu_icon_from_bytes(brand_icon_bytes(appearance))
 }
 
-fn load_menu_icon_from_path(path: PathBuf) -> Result<tray_icon::menu::Icon> {
-    let image = image::open(&path)
-        .with_context(|| format!("failed to load menu icon: {}", path.display()))?
+fn load_icon_from_bytes(bytes: &'static [u8]) -> Result<Icon> {
+    let image = image::load_from_memory(bytes)
+        .with_context(|| "failed to decode tray icon")?
+        .into_rgba8();
+    let (width, height) = image.dimensions();
+    Icon::from_rgba(image.into_raw(), width, height)
+        .map_err(|err| anyhow::anyhow!("invalid tray icon: {err}"))
+}
+
+fn load_menu_icon_from_bytes(bytes: &'static [u8]) -> Result<tray_icon::menu::Icon> {
+    let image = image::load_from_memory(bytes)
+        .with_context(|| "failed to decode menu icon")?
         .into_rgba8();
     let (width, height) = image.dimensions();
     tray_icon::menu::Icon::from_rgba(image.into_raw(), width, height)
-        .map_err(|err| anyhow::anyhow!("invalid menu icon {}: {err}", path.display()))
+        .map_err(|err| anyhow::anyhow!("invalid menu icon: {err}"))
 }
 
-fn status_icon_path(battery: Option<&BatteryInfo>) -> PathBuf {
-    let name = match battery.map(|battery| battery.percent) {
-        Some(0..=20) => "battery-status-low.png",
-        Some(21..=50) => "battery-status-medium.png",
-        Some(_) => "battery-status-normal.png",
-        None => "battery-status-unknown.png",
-    };
+fn battery_icon_bytes(battery: Option<&BatteryInfo>, appearance: AppearanceMode) -> &'static [u8] {
+    let palette = effective_palette(appearance);
+    match battery {
+        None => match palette {
+            IconPalette::LightBackground => {
+                include_bytes!("../assets/tray/png/battery-unknown-light.png")
+            }
+            IconPalette::DarkBackground => {
+                include_bytes!("../assets/tray/png/battery-unknown-dark.png")
+            }
+        },
+        Some(info) => {
+            if matches!(info.charge_state, ChargeState::Charging) {
+                match palette {
+                    IconPalette::LightBackground => {
+                        include_bytes!("../assets/tray/png/battery-charging-light.png")
+                    }
+                    IconPalette::DarkBackground => {
+                        include_bytes!("../assets/tray/png/battery-charging-dark.png")
+                    }
+                }
+            } else {
+                match (battery_bucket(info.percent), palette) {
+                    (0, IconPalette::LightBackground) => {
+                        include_bytes!("../assets/tray/png/battery-0-light.png")
+                    }
+                    (0, IconPalette::DarkBackground) => {
+                        include_bytes!("../assets/tray/png/battery-0-dark.png")
+                    }
+                    (1, IconPalette::LightBackground) => {
+                        include_bytes!("../assets/tray/png/battery-1-light.png")
+                    }
+                    (1, IconPalette::DarkBackground) => {
+                        include_bytes!("../assets/tray/png/battery-1-dark.png")
+                    }
+                    (2, IconPalette::LightBackground) => {
+                        include_bytes!("../assets/tray/png/battery-2-light.png")
+                    }
+                    (2, IconPalette::DarkBackground) => {
+                        include_bytes!("../assets/tray/png/battery-2-dark.png")
+                    }
+                    (_, IconPalette::LightBackground) => {
+                        include_bytes!("../assets/tray/png/battery-3-light.png")
+                    }
+                    (_, IconPalette::DarkBackground) => {
+                        include_bytes!("../assets/tray/png/battery-3-dark.png")
+                    }
+                }
+            }
+        }
+    }
+}
 
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("assets")
-        .join("tray")
-        .join("png")
-        .join(name)
+fn status_icon_bytes(battery: Option<&BatteryInfo>) -> &'static [u8] {
+    match battery.map(|b| b.percent) {
+        Some(0..=20) => include_bytes!("../assets/tray/png/battery-status-low.png"),
+        Some(21..=50) => include_bytes!("../assets/tray/png/battery-status-medium.png"),
+        Some(_) => include_bytes!("../assets/tray/png/battery-status-normal.png"),
+        None => include_bytes!("../assets/tray/png/battery-status-unknown.png"),
+    }
+}
+
+fn brand_icon_bytes(appearance: AppearanceMode) -> &'static [u8] {
+    match effective_palette(appearance) {
+        IconPalette::LightBackground => {
+            include_bytes!("../assets/tray/png/mchose-logo-light-16.png")
+        }
+        IconPalette::DarkBackground => {
+            include_bytes!("../assets/tray/png/mchose-logo-dark-16.png")
+        }
+    }
 }
 
 fn battery_bucket(percent: u8) -> u8 {
@@ -122,7 +139,7 @@ fn effective_palette(appearance: AppearanceMode) -> IconPalette {
     }
 }
 
-pub fn system_uses_light_theme() -> Option<bool> {
+fn system_uses_light_theme() -> Option<bool> {
     let key = CURRENT_USER
         .open("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize")
         .ok()?;

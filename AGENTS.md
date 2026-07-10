@@ -16,9 +16,11 @@ cargo build --release          # 打包（release 已开 lto + strip + panic=abo
 
 - `main.rs`：解析 `--scan` 分支；否则进入 winit `EventLoop`，启动 60 秒刷新线程 + 托盘控制器。
 - `protocols/mod.rs`：`BatteryProtocol` trait + `try_read_with_any_protocol`，按顺序尝试各协议。**新增型号在这里注册 `all_protocols()`**。
-- `protocols/a7_compatible.rs`：A7 已实现，按 VID `0x5253` / PID `0x1021` 匹配；使用 feature report（report id `0x11`，长度 64），收发字节均做 `^ 0xff` 异或。
-- `protocols/g3.rs`：G3 A 已按 MCHOSE `/gmouse` 网页源码实现，匹配 `a8a5:2255` + usage page `0xff01` / usage `0x10`；通过 `write` 发送 report id `0x00`、payload `55 30 a5 0b 2e 01 01 01 00 00...`，从 input report `aa 30` 解析 `response[8]` 电量、`response[9]` 充电标志。
-- `hid_scan.rs`：`looks_like_mchose` 用厂商/产品名 + VID `0x5253` 匹配；`stable_id_from_path` 是 FNV-1a，菜单 item id 依赖它，不要随意改。
+- `protocols/a5_pro.rs`：旧 A5/AX5 Pro（官方已弃更），VID `0x2023` + 已知 PID + **interface 2**；feature report 长度 65。电量：`[4]=2,[6]=0x83` → `[8]` 电量、`[7]` 充电。DPI：`0x81` 档位表 + `0x82` 当前档。来自旧驱动 `DriverCore.exe`。
+- `protocols/a7_compatible.rs`：旧 A7，VID `0x5253` / PID `0x1021`；feature report id `0x11`，收发 `^ 0xff`。
+- `protocols/g3.rs`（`GmouseProtocol`）：`/gmouse` 网页族（G3 A/V2、A7e、G7…）。匹配 usage page `0xff01` + VID `0xa8a5`/`0xa8a4`/`0x3837`；write `55 30 a5 0b 2e…`，input `aa 30` 解析电量/充电；另可读 DPI 配置。
+- `protocols/hub_native.rs`：主 HUB 新型号（K7/M7/L7、A5 Ultra/V2/V3、AX5 V2、G3 Ultra、A7 V2+…）。VID 主 `0x3837`；有线 feature `06 87…`、无线 `13 4a…`；解析 command=10/type=5 或 Bbe 布局。无真机时仅按网页命令落地，需用户 `--scan` 校验。
+- `hid_scan.rs`：`looks_like_mchose` 含名称 + VID `0x5253`/`0x2023`/`0x3837`/`0xa8a5`/`0xa8a4`。
 - `tray.rs` / `app_state.rs` / `icons.rs`：托盘 UI、状态、电量图标生成。
 
 ## 协议移植约定
