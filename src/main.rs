@@ -5,6 +5,7 @@ mod device_listener;
 mod hid_scan;
 mod icons;
 mod protocols;
+mod scan_worker;
 mod startup;
 mod tray;
 mod windows_theme;
@@ -12,16 +13,28 @@ mod windows_theme;
 use std::sync::Arc;
 use std::time::Duration;
 
-use app_state::{AppState, AppearanceMode};
+use app_state::{AppState, AppearanceMode, MchoseDevice};
 use parking_lot::Mutex;
+use scan_worker::ScanWorker;
 use tray::TrayController;
 use windows_sys::Win32::UI::Shell::ShellExecuteW;
 use winit::application::ApplicationHandler;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 
+/// 结束本线程上的 TrackPopupMenu（须在菜单所在线程调用）。
+fn end_popup_menu() {
+    unsafe {
+        extern "system" {
+            fn EndMenu() -> i32;
+        }
+        let _ = EndMenu();
+    }
+}
+
 #[derive(Debug)]
 pub enum UserEvent {
     TrayLeftClick,
+    TrayRightClick,
     OpenWebsite,
     Refresh,
     Rescan,
@@ -29,11 +42,46 @@ pub enum UserEvent {
     ToggleStartup,
     Exit,
     Tick,
+    /// USB/HID 热插拔：取消模态菜单并安排扫描
+    DeviceHotplug,
+    DevicesUpdated(Vec<MchoseDevice>),
 }
 
 struct TrayApp {
     state: Arc<Mutex<AppState>>,
     tray: TrayController,
+    scan_worker: ScanWorker,
+    menu_open: bool,
+    /// 菜单打开期间有状态变化，关闭后需 refresh
+    ui_dirty: bool,
+    /// 菜单打开期间推迟扫描
+    pending_scan: bool,
+}
+
+impl TrayApp {
+    fn request_scan(&mut self) {
+        if self.menu_open {
+            self.pending_scan = true;
+        } else {
+            self.scan_worker.request_scan();
+        }
+    }
+
+    fn refresh_ui(&mut self) {
+        let _ = self.tray.refresh_all(&self.state.lock());
+        self.ui_dirty = false;
+    }
+
+    /// 菜单关闭后：补 UI + 补扫描
+    fn after_menu_closed(&mut self) {
+        if self.ui_dirty {
+            self.refresh_ui();
+        }
+        if self.pending_scan {
+            self.pending_scan = false;
+            self.scan_worker.request_scan();
+        }
+    }
 }
 
 impl ApplicationHandler<UserEvent> for TrayApp {
@@ -52,45 +100,59 @@ impl ApplicationHandler<UserEvent> for TrayApp {
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
         match event {
             UserEvent::TrayLeftClick => {
-                {
+                let need_scan = {
                     let mut state = self.state.lock();
                     if state.devices.len() <= 1 {
-                        let devices = hid_scan::scan_mchose_devices().unwrap_or_default();
-                        state.set_devices(devices);
+                        true
                     } else {
                         state.switch_next();
+                        false
                     }
+                };
+                if need_scan {
+                    self.request_scan();
+                } else {
+                    self.refresh_ui();
                 }
-                let _ = self.tray.refresh_all(&self.state.lock());
+            }
+            UserEvent::TrayRightClick => {
+                self.refresh_ui();
+                self.menu_open = true;
+                self.tray.show_menu(); // TrackPopupMenu 阻塞；热插拔会 EndMenu 打断
+                self.menu_open = false;
+                self.after_menu_closed();
             }
             UserEvent::OpenWebsite => {
                 if let Err(err) = open_website() {
                     eprintln!("failed to open MCHOSE website: {err}");
                 }
             }
-            UserEvent::Refresh | UserEvent::Tick => {
-                {
-                    let devices = hid_scan::scan_mchose_devices().unwrap_or_default();
-                    self.state.lock().set_devices(devices);
+            UserEvent::Refresh | UserEvent::Tick => self.request_scan(),
+            UserEvent::DeviceHotplug => {
+                if self.menu_open {
+                    end_popup_menu();
+                    self.pending_scan = true;
+                    self.ui_dirty = true;
+                } else {
+                    self.scan_worker.request_scan();
                 }
-                let _ = self.tray.refresh_all(&self.state.lock());
             }
             UserEvent::Rescan => {
-                {
-                    let devices = hid_scan::scan_mchose_devices().unwrap_or_default();
-                    let mut state = self.state.lock();
-                    state.set_devices(devices);
-                    state.current_index = 0;
+                self.state.lock().current_index = 0;
+                self.request_scan();
+            }
+            UserEvent::DevicesUpdated(devices) => {
+                self.state.lock().set_devices(devices);
+                if self.menu_open {
+                    self.ui_dirty = true;
+                } else {
+                    self.refresh_ui();
                 }
-                let _ = self.tray.refresh_all(&self.state.lock());
             }
             UserEvent::SetAppearance(appearance) => {
-                {
-                    let mut state = self.state.lock();
-                    state.appearance_mode = appearance;
-                }
+                self.state.lock().appearance_mode = appearance;
                 windows_theme::apply_menu_appearance(appearance);
-                let _ = self.tray.refresh_all(&self.state.lock());
+                self.refresh_ui();
             }
             UserEvent::ToggleStartup => {
                 let enabled = !self.state.lock().startup_enabled;
@@ -98,7 +160,7 @@ impl ApplicationHandler<UserEvent> for TrayApp {
                     Ok(()) => self.state.lock().startup_enabled = enabled,
                     Err(err) => eprintln!("failed to update startup setting: {err}"),
                 }
-                let _ = self.tray.refresh_all(&self.state.lock());
+                self.refresh_ui();
             }
             UserEvent::Exit => event_loop.exit(),
         }
@@ -129,10 +191,7 @@ fn main() -> anyhow::Result<()> {
     windows_theme::apply_menu_appearance(AppearanceMode::Auto);
 
     let args: Vec<String> = std::env::args().collect();
-
     if args.iter().any(|arg| arg == "--scan") {
-        // Debug 模式保留控制台输出。release 下如果 windows_subsystem = windows，
-        // 建议单独加一个 console feature 或临时注释掉上面的 cfg_attr。
         hid_scan::debug_scan()?;
         return Ok(());
     }
@@ -145,7 +204,6 @@ fn run_tray() -> anyhow::Result<()> {
     let proxy = event_loop.create_proxy();
 
     let state = Arc::new(Mutex::new(AppState::new()));
-
     state.lock().startup_enabled = startup::is_enabled().unwrap_or_else(|err| {
         eprintln!("failed to read startup setting: {err}");
         false
@@ -159,16 +217,24 @@ fn run_tray() -> anyhow::Result<()> {
     let tray = TrayController::new(state.clone(), proxy.clone())?;
     tray.refresh_all(&state.lock())?;
 
+    let scan_worker = ScanWorker::spawn(proxy.clone());
+
     let tick_proxy = proxy.clone();
     std::thread::spawn(move || loop {
         std::thread::sleep(Duration::from_secs(30 * 60));
         let _ = tick_proxy.send_event(UserEvent::Tick);
     });
 
-    device_listener::spawn_device_listener(proxy.clone());
+    device_listener::spawn_device_listener(proxy);
 
-    let mut app = TrayApp { state, tray };
+    let mut app = TrayApp {
+        state,
+        tray,
+        scan_worker,
+        menu_open: false,
+        ui_dirty: false,
+        pending_scan: false,
+    };
     event_loop.run_app(&mut app)?;
-
     Ok(())
 }

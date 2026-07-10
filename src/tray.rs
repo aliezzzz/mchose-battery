@@ -106,12 +106,13 @@ impl TrayController {
 
         let tooltip = state.lock().current_tooltip();
 
+        // 右键由主逻辑先 refresh 再 show_menu；热插拔时 EndMenu 关菜单
         let tray_icon = TrayIconBuilder::new()
             .with_tooltip(tooltip)
             .with_icon(icon)
             .with_menu(Box::new(menu.clone()))
             .with_menu_on_left_click(false)
-            .with_menu_on_right_click(true)
+            .with_menu_on_right_click(false)
             .build()?;
 
         setup_event_forwarding(proxy);
@@ -131,8 +132,22 @@ impl TrayController {
         })
     }
 
+    pub fn show_menu(&self) {
+        self.tray_icon.show_menu();
+    }
+
     pub fn refresh_all(&self, state: &AppState) -> Result<()> {
-        self.title_item
+        let battery = state
+            .current_device()
+            .and_then(|device| device.status.as_ref())
+            .map(|status| &status.battery);
+
+        self.tray_icon
+            .set_icon(Some(load_battery_icon(battery, state.appearance_mode)?))?;
+        self.tray_icon.set_tooltip(Some(&state.current_tooltip()))?;
+
+        let _ = self
+            .title_item
             .set_icon(Some(load_menu_brand_icon(state.appearance_mode)?));
 
         match state.current_device() {
@@ -141,33 +156,26 @@ impl TrayController {
                 let battery = device.status.as_ref().map(|status| &status.battery);
                 self.battery_item
                     .set_text(format_battery_menu_text(battery));
-                self.battery_item
+                let _ = self
+                    .battery_item
                     .set_icon(Some(load_menu_status_icon(battery)?));
                 self.status_item.set_text(format!(
                     "状态：{}",
                     format_charge_label(device.charge_label())
                 ));
                 self.dpi_item.set_text(device.dpi_label());
-
-                self.tray_icon
-                    .set_icon(Some(load_battery_icon(battery, state.appearance_mode)?))?;
             }
             None => {
                 self.current_item.set_text("● 未发现设备");
                 self.battery_item.set_text("电量：--");
-                self.battery_item
-                    .set_icon(Some(load_menu_status_icon(None)?));
+                let _ = self.battery_item.set_icon(Some(load_menu_status_icon(None)?));
                 self.status_item.set_text("状态：--");
                 self.dpi_item.set_text("DPI：未知");
-
-                self.tray_icon
-                    .set_icon(Some(load_battery_icon(None, state.appearance_mode)?))?;
             }
         }
 
         self.refresh_appearance_menu(state.appearance_mode);
         self.startup_item.set_checked(state.startup_enabled);
-        self.tray_icon.set_tooltip(Some(&state.current_tooltip()))?;
         Ok(())
     }
 
@@ -224,8 +232,17 @@ fn setup_event_forwarding(proxy: EventLoopProxy<UserEvent>) {
             ..
         } = event
         {
-            if button == MouseButton::Left && button_state == MouseButtonState::Up {
-                let _ = tray_proxy.send_event(UserEvent::TrayLeftClick);
+            if button_state != MouseButtonState::Up {
+                return;
+            }
+            match button {
+                MouseButton::Left => {
+                    let _ = tray_proxy.send_event(UserEvent::TrayLeftClick);
+                }
+                MouseButton::Right => {
+                    let _ = tray_proxy.send_event(UserEvent::TrayRightClick);
+                }
+                _ => {}
             }
         }
     }));

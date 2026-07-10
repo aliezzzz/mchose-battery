@@ -58,6 +58,43 @@ extern "system" {
     fn DispatchMessageW(lp_msg: *const Msg) -> isize;
 
     fn GetModuleHandleW(lp_module_name: *const u16) -> isize;
+
+    fn FindWindowW(lp_class_name: *const u16, lp_window_name: *const u16) -> isize;
+
+    fn PostMessageW(h_wnd: isize, msg: u32, w_param: usize, l_param: isize) -> i32;
+
+    fn EnumWindows(
+        lp_enum_func: unsafe extern "system" fn(isize, isize) -> i32,
+        l_param: isize,
+    ) -> i32;
+
+    fn GetClassNameW(h_wnd: isize, lp_class_name: *mut u16, n_max_count: i32) -> i32;
+}
+
+const WM_CANCELMODE: u32 = 0x001F;
+
+/// 跨线程取消 tray-icon 的 TrackPopupMenu（窗口类名 tray_icon_app）。
+unsafe extern "system" fn enum_cancel_tray_menu(h_wnd: isize, _l_param: isize) -> i32 {
+    let mut class = [0u16; 64];
+    let len = GetClassNameW(h_wnd, class.as_mut_ptr(), class.len() as i32);
+    if len > 0 {
+        let name = String::from_utf16_lossy(&class[..len as usize]);
+        if name == "tray_icon_app" {
+            let _ = PostMessageW(h_wnd, WM_CANCELMODE, 0, 0);
+        }
+    }
+    1 // continue
+}
+
+fn cancel_tray_popup_menus() {
+    unsafe {
+        let class: Vec<u16> = "tray_icon_app\0".encode_utf16().collect();
+        let hwnd = FindWindowW(class.as_ptr(), std::ptr::null());
+        if hwnd != 0 {
+            let _ = PostMessageW(hwnd, WM_CANCELMODE, 0, 0);
+        }
+        let _ = EnumWindows(enum_cancel_tray_menu, 0);
+    }
 }
 
 #[repr(C)]
@@ -101,6 +138,9 @@ unsafe extern "system" fn wnd_proc(
     if msg == WM_DEVICECHANGE {
         let event = w_param as u32;
         if event == DBT_DEVICEARRIVAL || event == DBT_DEVICEREMOVECOMPLETE {
+            // 立刻打断主线程上的 TrackPopupMenu，避免热插拔卡死
+            cancel_tray_popup_menus();
+
             if let Some(state) = (*std::ptr::addr_of!(LISTENER_STATE)).as_ref() {
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -109,11 +149,12 @@ unsafe extern "system" fn wnd_proc(
                 let last = state
                     .last_refresh_ms
                     .load(std::sync::atomic::Ordering::Relaxed);
-                if now - last > 1000 {
+                // 尽快送达主线程；扫描侧还有 scan_worker 防抖
+                if now - last > 100 {
                     state
                         .last_refresh_ms
                         .store(now, std::sync::atomic::Ordering::Relaxed);
-                    let _ = state.proxy.send_event(UserEvent::Refresh);
+                    let _ = state.proxy.send_event(UserEvent::DeviceHotplug);
                 }
             }
             return 1;

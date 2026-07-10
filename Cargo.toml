@@ -1,6 +1,6 @@
 [package]
 name = "mchose-battery-tray"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "A no-window Windows tray utility for MCHOSE / MaiCong mouse battery status."
 license = "MIT"
