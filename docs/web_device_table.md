@@ -14,6 +14,7 @@
 | B 旧 A7 | `a7_compatible` | A7（公开项目） | `0x5253:0x1021` | feature `0x11` + XOR |
 | C gmouse | `g3` / Gmouse | G3 A/V2、A7e、G7 | usage `0xFF01`，VID `0xA8A5`/`0xA8A4`/`0x3837` | write `55 30 a5…` → `aa 30` |
 | D 主 HUB | `hub_native` | K7/M7/L7、A5 Ultra/V2/V3、AX5 V2、G3 Ultra、A7 V2+ | VID `0x3837` + 厂商 usage page | 有线 `06 87…` / 无线 `13 4a…`；上报 cmd=10 type=5 |
+| E 新 Nordic 鼠标 | `mc_new_mouse` | K5 Pro/Ultra、K5 Ultra 典藏版、K5 V2、A5 V3、A7 V3、K7 V2 等 | VID `0x3837` + PID `0x1014/0x1018/0x101c`（2.4G）/ `0x4037/0x4038/0x4040`（有线），厂商 usage page | output report id `0x4D`，cmd `0x0900`；body[11] 充电、body[12] 电量。DPI：cmd `0x0002` 取配置档 + `0x0003` 取档位表 |
 
 ## gmouse 有线 VID/PID 示例
 

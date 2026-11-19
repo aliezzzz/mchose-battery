@@ -20,6 +20,7 @@ cargo build --release          # 打包（release 已开 lto + strip + panic=abo
 - `protocols/a7_compatible.rs`：旧 A7，VID `0x5253` / PID `0x1021`；feature report id `0x11`，收发 `^ 0xff`。
 - `protocols/g3.rs`（`GmouseProtocol`）：`/gmouse` 网页族（G3 A/V2、A7e、G7…）。匹配 usage page `0xff01` + VID `0xa8a5`/`0xa8a4`/`0x3837`；write `55 30 a5 0b 2e…`，input `aa 30` 解析电量/充电；另可读 DPI 配置。
 - `protocols/hub_native.rs`：主 HUB 新型号（K7/M7/L7、A5 Ultra/V2/V3、AX5 V2、G3 Ultra、A7 V2+…）。VID 主 `0x3837`；有线 feature `06 87…`、无线 `13 4a…`；解析 command=10/type=5 或 Bbe 布局。无真机时仅按网页命令落地，需用户 `--scan` 校验。
+- `protocols/mc_new_mouse.rs`：新一代 Nordic 鼠标（K5 Pro/Ultra/典藏版、K5 V2、A5 V3、A7 V3、K7 V2…）。K5 Ultra 典藏版 2.4G PID `0x1018`，有线 `0x4038`。output report id `0x4D`，64 字节报文，cmd `0x0900`；body[11] 充电、body[12] 电量。DPI：cmd `0x0002` 读配置档，再 `0x0003`（data `[profile, 0]`）读档位表，body[2] 档数、body[3] 当前档、body[5..] 每档 uint16 LE。来自 HUB `newMouse:cmdStruct`。
 - `hid_scan.rs`：`looks_like_mchose` 含名称 + VID `0x5253`/`0x2023`/`0x3837`/`0xa8a5`/`0xa8a4`。
 - `tray.rs` / `app_state.rs` / `icons.rs`：托盘 UI、状态、电量图标生成。
 
