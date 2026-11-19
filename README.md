@@ -28,6 +28,7 @@ Windows 托盘小工具：读取 **MCHOSE / 迈从** 鼠标电量与充电状态
 |------|------|------|
 | **G3 A** | Gmouse | 网页 `/gmouse` 协议，真机通过 |
 | **A5 Pro Max** | A5/AX5 | 旧驱动协议（VID `0x2023`），真机通过 |
+| **K5 Ultra 典藏版** | K5 | 新一代 Nordic 协议（PID `0x1018`），真机通过，含 DPI |
 
 ### 协议已实现 · 待验证
 
@@ -37,6 +38,7 @@ Windows 托盘小工具：读取 **MCHOSE / 迈从** 鼠标电量与充电状态
 | G3 V2、G3 V2 Pro、A7e、G7 / G7 Pro 等 | Gmouse | [mchose.com.cn/gmouse](https://www.mchose.com.cn/gmouse) |
 | 旧 A7 | A7 | 公开项目逻辑移植 |
 | K7 Ultra、M7 / L7 系列、G7 系列（HUB）、G3 Ultra、A5 Ultra / V2 Ultra / V3、AX5 V2、A7 V2+ 等 | Hub | 官方主站 HUB 网页协议 |
+| K5 Pro / Ultra / 典藏版、K5 V2、A5 V3、A7 V3、K7 V2 等新一代 Nordic 型号 | K5 | HUB `newMouse` 协议（report `0x4D` / cmd `0x0900`） |
 
 更细的 VID/PID 与命令说明见 [`docs/web_device_table.md`](docs/web_device_table.md)。
 
